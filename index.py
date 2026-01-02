@@ -3,52 +3,46 @@ import requests
 
 app = Flask(__name__)
 
-# List of backup engines
-ENGINES = [
-    "https://terabox-dl.qtcloud.workers.dev/api/get-info?url={}",
-    "https://api.vkrdown.com/server/?vkr={}",
-    "https://terabox.recloud.workers.dev/api/get-info?url={}"
-]
-
 @app.route("/")
 def home():
-    return jsonify({"status": 1, "msg": "Zion Multi-Engine API is Live!"})
+    return "Zion Ultimate Engine is Online!"
 
 @app.route("/api/terabox")
 def terabox():
     link = request.args.get("link")
     if not link:
-        return jsonify({"status": 0, "error": "Bhai link toh dalo!"})
+        return jsonify({"status": 0, "error": "Link missing!"})
 
+    # Publer Engine - Ye Cloudflare ko bypass karne mein king hai
+    api_url = "https://publer.io/api/v1/tools/media-download"
+    
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Origin": "https://publer.io",
+        "Referer": "https://publer.io/terabox-video-downloader"
     }
 
-    # Baari-baari saare engines try karo
-    for engine_url in ENGINES:
-        try:
-            target = engine_url.format(link)
-            print(f"📡 Trying: {target}")
-            res = requests.get(target, headers=headers, timeout=10)
-            
-            # Check if response is actually JSON
-            if res.status_code == 200:
-                data = res.json()
-                # Agar data mein download links hain, toh return kar do
-                return jsonify({
-                    "status": 1,
-                    "engine": "Zion-Auto-Fallback",
-                    "data": data
-                })
-        except Exception as e:
-            print(f"❌ Engine Failed: {str(e)}")
-            continue
+    try:
+        # Step 1: Request metadata from Publer
+        payload = {"url": link}
+        res = requests.post(api_url, json=payload, headers=headers, timeout=15)
+        
+        if res.status_code == 200:
+            data = res.json()
+            return jsonify({
+                "status": 1,
+                "engine": "Publer-Bypass",
+                "title": data.get("title"),
+                "thumbnail": data.get("thumbnail"),
+                "links": data.get("payload", []) # Publer 'payload' mein links deta hai
+            })
+        else:
+            # Fallback to the simplest worker if Publer fails
+            fallback_res = requests.get(f"https://terabox-dl.qtcloud.workers.dev/api/get-info?url={link}", timeout=10)
+            return jsonify(fallback_res.json())
 
-    return jsonify({
-        "status": 0,
-        "error": "ALL_ENGINES_DOWN",
-        "msg": "Bhai, saare providers abhi busy hain. 5 min baad try karo."
-    })
+    except Exception as e:
+        return jsonify({"status": 0, "error": "All bypasses failed", "msg": str(e)})
 
 def handler(event, context):
     return app(event, context)
