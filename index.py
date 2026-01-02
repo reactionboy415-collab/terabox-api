@@ -3,26 +3,52 @@ import requests
 
 app = Flask(__name__)
 
+# List of backup engines
+ENGINES = [
+    "https://terabox-dl.qtcloud.workers.dev/api/get-info?url={}",
+    "https://api.vkrdown.com/server/?vkr={}",
+    "https://terabox.recloud.workers.dev/api/get-info?url={}"
+]
+
 @app.route("/")
 def home():
-    return "Zion API is Running!"
+    return jsonify({"status": 1, "msg": "Zion Multi-Engine API is Live!"})
 
 @app.route("/api/terabox")
 def terabox():
     link = request.args.get("link")
     if not link:
-        return jsonify({"status": 0, "error": "Link missing"})
-    
-    api_url = f"https://terabox-dl.qtcloud.workers.dev/api/get-info?url={link}"
-    
-    try:
-        # User-Agent add kiya taaki target server block na kare
-        headers = {"User-Agent": "Mozilla/5.0"}
-        res = requests.get(api_url, headers=headers, timeout=15)
-        return jsonify(res.json())
-    except Exception as e:
-        return jsonify({"status": 0, "error": str(e)})
+        return jsonify({"status": 0, "error": "Bhai link toh dalo!"})
 
-# Ye niche wali line hata dena (Vercel automatically handle karega)
-# if __name__ == "__main__":
-#     app.run()
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
+    }
+
+    # Baari-baari saare engines try karo
+    for engine_url in ENGINES:
+        try:
+            target = engine_url.format(link)
+            print(f"📡 Trying: {target}")
+            res = requests.get(target, headers=headers, timeout=10)
+            
+            # Check if response is actually JSON
+            if res.status_code == 200:
+                data = res.json()
+                # Agar data mein download links hain, toh return kar do
+                return jsonify({
+                    "status": 1,
+                    "engine": "Zion-Auto-Fallback",
+                    "data": data
+                })
+        except Exception as e:
+            print(f"❌ Engine Failed: {str(e)}")
+            continue
+
+    return jsonify({
+        "status": 0,
+        "error": "ALL_ENGINES_DOWN",
+        "msg": "Bhai, saare providers abhi busy hain. 5 min baad try karo."
+    })
+
+def handler(event, context):
+    return app(event, context)
